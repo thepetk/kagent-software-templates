@@ -1,0 +1,34 @@
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: ${{ values.name }}
+  namespace: ${{ values.namespace }}
+spec:
+  description: ${{ values.agentDescription }}
+  {%- if values.byoAgent %}
+  type: External
+  external:
+    url: http://${{ values.name }}.${{ values.namespace }}.svc.cluster.local:8080
+  {%- else %}
+  type: Declarative
+  declarative:
+    modelConfig: ${{ values.modelConfigName }}
+    systemMessage: |-
+      ${{ values.systemMessage }}
+    tools:
+      - type: McpServer
+        mcpServer:
+          name: kagent-tool-server
+          kind: RemoteMCPServer
+          toolNames:
+            - k8s_get_resources
+    a2aConfig:
+      skills:
+        - id: ${{ values.name }}-skill
+          name: ${{ values.agentSkillName }}
+          description: ${{ values.agentSkillDescription }}
+          inputModes:
+            - text
+          outputModes:
+            - text
+  {%- endif %}

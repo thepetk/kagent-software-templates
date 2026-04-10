@@ -1,0 +1,11 @@
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: ${{ values.modelConfigName }}
+  namespace: ${{ values.namespace }}
+spec:
+  apiKeySecretRef:
+    key: ${{ values.modelApiKeySecretKey }}
+    name: ${{ values.modelApiKeySecretName }}
+  model: ${{ values.modelName }}
+  provider: ${{ values.modelProvider }}

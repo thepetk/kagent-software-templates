@@ -1,0 +1,23 @@
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: ${{ values.appName }}
+  description: ${{ values.description }}
+  links:
+    - url: https://kagent.dev/docs
+      title: kagent Documentation
+      icon: dashboard
+      type: admin-dashboard
+  annotations:
+    argocd/app-selector: rhtap/gitops=${{ values.name }}
+    janus-idp.io/tekton: ${{ values.name }}
+    backstage.io/kubernetes-id: ${{ values.name }}
+    backstage.io/techdocs-ref: dir:.
+spec:
+  type: gitops
+  owner: ${{ values.owner }}
+  lifecycle: experimental
+  {%- if values.byoAgent %}
+  dependsOn:
+    - component:${{ values.name }}
+  {%- endif %}

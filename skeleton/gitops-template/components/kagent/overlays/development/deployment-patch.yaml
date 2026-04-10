@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${{ values.name }}
+spec:
+  replicas: 1
+  template:
+    spec:
+      containers:
+        - image: quay.io/redhat-ai-dev/ai-template-bootstrap-app:latest
+          name: agent
