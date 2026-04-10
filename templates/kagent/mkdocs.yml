@@ -1,0 +1,7 @@
+site_name: 'kagent Agent Template'
+
+nav:
+  - Home: index.md
+
+plugins:
+  - techdocs-core

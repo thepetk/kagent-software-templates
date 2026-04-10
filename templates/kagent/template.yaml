@@ -1,0 +1,393 @@
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: kagent
+  title: kagent Agent
+  description: >
+    Create a kagent-based AI agent on Kubernetes, managed via GitOps (ArgoCD).
+    Choose between a simple declarative agent or a BYO agent that connects an
+    existing repo to a new gitops repo.
+  tags: ["ai", "kagent", "kubernetes", "a2a"]
+  annotations:
+    backstage.io/techdocs-ref: dir:.
+spec:
+  type: service
+  owner: rhdh-pai
+  parameters:
+    - title: Agent Information
+      required:
+        - name
+        - owner
+        - argoNS
+        - argoInstance
+        - argoProject
+        - agentType
+      ui:order:
+        - name
+        - owner
+        - agentType
+        - argoNS
+        - argoInstance
+        - argoProject
+        - includeArgoLabel
+        - argoAppLabel
+        - "*"
+      properties:
+        name:
+          title: Name
+          type: string
+          description: Unique name of the agent component
+          ui:autofocus: true
+          ui:field: EntityNamePicker
+          maxLength: 63
+        owner:
+          title: Owner
+          type: string
+          description: Owner of the component
+          default: user:guest
+          ui:field: OwnerPicker
+          ui:options: {}
+        agentType:
+          title: Agent Type
+          type: string
+          description: >
+            Choose "Agent" to create a simple declarative kagent agent (gitops only),
+            or "BYO Agent" to connect an existing GitHub repo to a new gitops repo.
+          default: agent
+          enum:
+            - agent
+            - byo-agent
+          enumNames:
+            - Agent
+            - BYO Agent
+        argoNS:
+          title: ArgoCD Namespace
+          type: string
+          description: The target namespace of the ArgoCD deployment
+          default: openshift-gitops
+          maxLength: 63
+        argoInstance:
+          title: ArgoCD Instance
+          type: string
+          description: The target ArgoCD instance name
+          default: default
+          maxLength: 63
+        argoProject:
+          title: ArgoCD Project
+          type: string
+          description: The target ArgoCD project name
+          default: default
+          maxLength: 63
+        includeArgoLabel:
+          title: Include ArgoCD App Label?
+          type: boolean
+          description: Indicates whether to include a user provided ArgoCD Application Label to set
+      dependencies:
+        includeArgoLabel:
+          oneOf:
+            - required:
+                - argoAppLabel
+              properties:
+                includeArgoLabel:
+                  const: true
+                argoAppLabel:
+                  title: ArgoCD Application Label
+                  type: string
+                  description: Define the label RHDH will use to identify the ArgoCD Applications
+        agentType:
+          oneOf:
+            - required:
+                - agentDescription
+                - systemMessage
+                - agentSkillName
+                - agentSkillDescription
+                - modelProvider
+                - modelName
+                - modelConfigName
+                - modelApiKeySecretName
+                - modelApiKeySecretKey
+              properties:
+                agentType:
+                  const: agent
+                agentDescription:
+                  title: Agent Description
+                  type: string
+                  description: A short description of what this agent does
+                systemMessage:
+                  title: System Message
+                  type: string
+                  description: The system prompt that defines the agent's behavior and role
+                  ui:widget: textarea
+                  ui:options:
+                    rows: 6
+                agentSkillName:
+                  title: Agent Skill Name
+                  type: string
+                  description: The name of the primary skill this agent exposes via A2A
+                  default: General Assistance
+                agentSkillDescription:
+                  title: Agent Skill Description
+                  type: string
+                  description: A short description of the skill for A2A discovery
+                  default: General purpose assistance
+                modelProvider:
+                  title: Model Provider
+                  type: string
+                  description: The LLM provider to use
+                  default: OpenAI
+                  enum:
+                    - OpenAI
+                    - Anthropic
+                    - Azure
+                    - Ollama
+                modelName:
+                  title: Model Name
+                  type: string
+                  description: The name of the model to use
+                  default: gpt-4o
+                modelConfigName:
+                  title: Model Config Name
+                  type: string
+                  description: The name for the ModelConfig Kubernetes resource
+                  default: default-model-config
+                  ui:help: "See the ModelConfig API reference: https://kagent.dev/docs/kagent/resources/api-ref#modelconfig"
+                modelApiKeySecretName:
+                  title: API Key Secret Name
+                  type: string
+                  description: >
+                    Name of the Kubernetes Secret containing the LLM provider API key.
+                    This secret must already exist in the target namespace.
+                  default: llm-api-secret
+                modelApiKeySecretKey:
+                  title: API Key Secret Key
+                  type: string
+                  description: The key within the Secret that holds the API key value
+                  default: apiKey
+            - required:
+                - agentDescription
+                - agentSkillName
+                - agentSkillDescription
+                - existingRepoURL
+                - imageRegistry
+                - imageOrg
+                - imageName
+              properties:
+                agentType:
+                  const: byo-agent
+                agentDescription:
+                  title: Agent Description
+                  type: string
+                  description: A short description of what this agent does
+                agentSkillName:
+                  title: Agent Skill Name
+                  type: string
+                  description: The name of the primary skill this agent exposes via A2A
+                  default: General Assistance
+                agentSkillDescription:
+                  title: Agent Skill Description
+                  type: string
+                  description: A short description of the skill for A2A discovery
+                  default: General purpose assistance
+                existingRepoURL:
+                  title: Existing Agent Repository URL
+                  type: string
+                  description: >
+                    URL of your existing GitHub agent source repository. Tekton
+                    pipelines will be installed here and triggered on every push
+                    to build a new image and update the gitops deployment.
+                  ui:help: "Example: https://github.com/my-org/my-agent"
+                imageRegistry:
+                  title: Image Registry
+                  type: string
+                  description: The registry where built images will be pushed
+                  default: quay.io
+                  ui:help: "Example: quay.io or quay-tv2pb.apps.cluster-tv2pb.sandbox1194.opentlc.com"
+                imageOrg:
+                  title: Image Organization
+                  type: string
+                  description: The organization or user that owns the image repository
+                imageName:
+                  title: Image Name
+                  type: string
+                  description: The name of the image to build and push
+
+    - title: GitOps Repository Information
+      required:
+        - githubServer
+        - repoOwner
+        - repoName
+        - branch
+      properties:
+        githubServer:
+          title: Repository Server
+          type: string
+          default: github.com
+          ui:help: "You can also provide the on-prem GitHub server, example: github-github.apps.cluster-ljg9z.sandbox219.opentlc.com"
+        repoOwner:
+          title: Repository Owner
+          type: string
+          ui:help: The organization, user or project that this repo will belong to
+        repoName:
+          title: Repository Name
+          type: string
+        branch:
+          title: Repository Default Branch
+          type: string
+          default: main
+
+    - title: Deployment Information
+      required:
+        - namespace
+      properties:
+        namespace:
+          title: Deployment Namespace
+          type: string
+          default: kagent
+          ui:autofocus: true
+          ui:options:
+            rows: 5
+
+  steps:
+    # BYO agent only: render Tekton pipeline files and open a PR on the existing repo
+    - id: fetch-tekton-files
+      name: Fetch Tekton Pipeline Files
+      action: fetch:template
+      if: ${{ parameters.agentType === 'byo-agent' }}
+      input:
+        url: ../../skeleton/source-repo/.tekton
+        targetPath: tekton
+        values:
+          name: ${{ parameters.name }}
+          image: '${{ parameters.imageRegistry }}/${{ parameters.imageOrg }}/${{ parameters.imageName }}'
+          defaultBranch: ${{ parameters.branch }}
+
+    - id: install-tekton-pipelines
+      name: Install Tekton Pipelines on Existing Repo
+      action: publish:github:pull-request
+      if: ${{ parameters.agentType === 'byo-agent' }}
+      input:
+        repoUrl: ${{ parameters.githubServer }}?owner=${{ parameters.existingRepoURL | replace('https://' + parameters.githubServer + '/', '') | split('/') | first }}&repo=${{ parameters.existingRepoURL | replace('https://' + parameters.githubServer + '/', '') | split('/') | last }}
+        branchName: add-tekton-pipelines
+        title: "Add Tekton CI pipelines"
+        description: >
+          This PR adds Tekton Pipelines as Code (PaC) pipeline definitions.
+          Once merged, every push to the default branch will trigger a container
+          image build and update the kagent gitops deployment automatically.
+        sourcePath: tekton
+        targetPath: .tekton
+        targetBranchName: ${{ parameters.branch }}
+
+    # Both variants: fetch the GitOps skeleton
+    - id: fetch-gitops-skeleton
+      name: Fetch GitOps Skeleton
+      action: fetch:template
+      input:
+        url: ../../skeleton/gitops-template
+        targetPath: gitops
+        values:
+          name: ${{ parameters.name }}
+          appName: ${{ parameters.name }}-gitops
+          description: GitOps manifests for kagent agent ${{ parameters.name }}
+          namespace: ${{ parameters.namespace }}
+          rhdhNamespace: ai-rhdh
+          repoURL: https://${{ parameters.githubServer }}/${{ parameters.repoOwner }}/${{ parameters.repoName }}-gitops
+          srcRepoURL: ${{ parameters.existingRepoURL if parameters.agentType === 'byo-agent' else 'https://' + parameters.githubServer + '/' + parameters.repoOwner + '/' + parameters.repoName }}
+          argoComponentOverlays: "./components/${{ parameters.name }}/overlays"
+          owner: ${{ parameters.owner }}
+          argoNS: ${{ parameters.argoNS }}
+          argoProject: ${{ parameters.argoProject }}
+          webhookSecret: pipelines-secret
+          webhookSecretKey: webhook.secret
+          defaultBranch: ${{ parameters.branch }}
+          # Variation flag
+          byoAgent: ${{ parameters.agentType === 'byo-agent' }}
+          agentDescription: ${{ parameters.agentDescription }}
+          # Declarative agent values (agent variant)
+          systemMessage: ${{ parameters.systemMessage }}
+          agentSkillName: ${{ parameters.agentSkillName }}
+          agentSkillDescription: ${{ parameters.agentSkillDescription }}
+          modelProvider: ${{ parameters.modelProvider }}
+          modelName: ${{ parameters.modelName }}
+          modelConfigName: ${{ parameters.modelConfigName }}
+          modelApiKeySecretName: ${{ parameters.modelApiKeySecretName }}
+          modelApiKeySecretKey: ${{ parameters.modelApiKeySecretKey }}
+          # BYO agent values
+          appContainer: '${{ parameters.imageRegistry }}/${{ parameters.imageOrg }}/${{ parameters.imageName }}:latest'
+
+    # Agent variant only: delete BYO-specific resources
+    - id: cleanupByoResources
+      action: fs:delete
+      name: Cleanup Unused BYO Resources
+      if: ${{ parameters.agentType === 'agent' }}
+      input:
+        files:
+          - "gitops/components/kagent/base/deployment.yaml"
+          - "gitops/components/kagent/base/service.yaml"
+          - "gitops/components/kagent/base/route.yaml"
+          - "gitops/components/kagent/overlays/development/deployment-patch.yaml"
+          - "gitops/components/kagent/overlays/development/tekton-repositories"
+
+    # BYO agent only: delete model-config (not needed for external agents)
+    - id: cleanupModelConfig
+      action: fs:delete
+      name: Cleanup Unused Model Config
+      if: ${{ parameters.agentType === 'byo-agent' }}
+      input:
+        files:
+          - "gitops/components/kagent/base/model-config.yaml"
+
+    # Rename component directory from 'kagent' to the agent's name
+    - action: fs:rename
+      id: renameComponentDir
+      name: Rename Component Directory
+      input:
+        files:
+          - from: gitops/components/kagent
+            to: gitops/components/${{ parameters.name }}
+            overwrite: true
+
+    - id: publish-github-gitops
+      name: Publish GitOps Repository to GitHub
+      action: publish:github
+      input:
+        sourcePath: gitops
+        description: GitOps manifests for kagent agent ${{ parameters.name }}
+        repoUrl: ${{ parameters.githubServer }}?owner=${{ parameters.repoOwner }}&repo=${{ parameters.repoName }}-gitops
+        defaultBranch: "main"
+        protectDefaultBranch: false
+        repoVisibility: "public"
+
+    - id: wait-for-github-repository
+      name: Waiting for Repository Availability
+      action: "debug:wait"
+      input:
+        seconds: 3
+
+    - id: register-gitops
+      name: Register GitOps Resource
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps['publish-github-gitops'].output.repoContentsUrl }}
+        catalogInfoPath: "/catalog-info.yaml"
+
+    - id: create-argocd-resources
+      name: Create ArgoCD Resources
+      action: argocd:create-resources
+      input:
+        appName: ${{ parameters.name }}-app-of-apps
+        argoInstance: ${{ parameters.argoInstance }}
+        namespace: ${{ parameters.argoNS }}
+        labelValue: ${{ parameters.argoAppLabel if parameters.includeArgoLabel else '' }}
+        repoUrl: https://${{ parameters.githubServer }}/${{ parameters.repoOwner }}/${{ parameters.repoName }}-gitops.git
+        path: "./app-of-apps"
+
+  output:
+    links:
+      - title: GitOps Repository
+        url: ${{ steps['publish-github-gitops'].output.remoteUrl }}
+      - title: Open GitOps Resource in Catalog
+        icon: catalog
+        entityRef: ${{ steps['register-gitops'].output.entityRef }}
+      - title: Tekton Pipelines PR
+        url: ${{ steps['install-tekton-pipelines'].output.remoteUrl }}
+        if: ${{ parameters.agentType === 'byo-agent' }}
